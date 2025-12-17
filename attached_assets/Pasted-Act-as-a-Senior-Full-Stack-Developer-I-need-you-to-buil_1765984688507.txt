@@ -1,0 +1,76 @@
+Act as a Senior Full Stack Developer. I need you to build a comprehensive Car Rental Management System MVP.
+
+PROJECT ARCHITECTURE: "Simulation Mode"
+This app is designed for a single business owner who acts as both the Admin and the Customer interface.
+- There is NO Login Screen.
+- Instead, implement a global "Role Context" with a Toggle Switch in the Navbar: [View as Customer] <-> [View as Admin].
+- Default state on load: 'Admin'.
+
+TECH STACK (Strict):
+- Frontend: React (Vite) + Tailwind CSS.
+- Backend Option A (Production): Supabase (Auth/Database).
+- Backend Option B (Local Dev): Local Mock Data (JSON).
+- Router: React Router DOM.
+- Icons: Lucide React.
+- Charts: Use a lightweight library or CSS Grid for the Gantt Chart.
+
+CRITICAL REQUIREMENT: OFFLINE/LOCAL DEVELOPMENT
+You must architect the data layer to support a "Mock Mode" for local development without Supabase.
+1. Create a `services/api.js` abstraction layer.
+2. Check an environment variable (e.g., `VITE_USE_MOCK=true`).
+3. If true, return data from a local `mockData.json` file.
+4. If false, fetch data from Supabase.
+This allows the developer to run `npm run dev` and test the full flow immediately without setting up the database.
+
+---
+UI/LAYOUT BLUEPRINT (Specific Design Instructions):
+
+1. LANDING PAGE (Home.jsx) - The "Split" Design
+- Hero Section: A clean, modern hero with a high-quality placeholder background image of a car.
+- The "Dual Action" Card: Floating in the center of the Hero, with two tabs:
+  - Tab A "Check Availability": Inputs for Start/End Date + Big 'Search' Button.
+  - Tab B "Browse Cars": A 'View All Vehicles' button.
+- Mobile: Stack these elements vertically. Ensure buttons are "thumb-friendly" (min-height 48px).
+
+2. FLEET CATALOG (Fleet.jsx) - The "Grid" View
+- Layout: CSS Grid. Desktop = 3 cards/row. Mobile = 1 card/row.
+- Component "CarCard":
+  - Top: Image (Aspect ratio 16:9).
+  - Middle: Model Name (Bold) + Transmission Badge ('Auto'/'Manual').
+  - Bottom: Price (e.g., "₱1,500/day") on Left + "Book Now" button on Right.
+- Logic: If status != 'available', gray out the card and disable the button.
+
+3. ADMIN DASHBOARD (Dashboard.jsx) - The "Gantt" View
+- Header: Stats row (Total Cars, Rented Today, Revenue Today).
+- Timeline (Gantt Chart):
+  - Y-Axis (Left): List of Car Models.
+  - X-Axis (Top): Scrollable horizontal dates (next 30 days).
+  - Data Bars: Render bookings as colored bars spanning start-end dates.
+    - Use the vehicle's `color_hex` property for the bar background.
+    - Display the `guest_name` inside the bar if space permits.
+- Interaction: Clicking a bar opens a "Booking Details Modal" (Show Guest Info, ID Status, Buttons to Approve/Complete).
+
+4. BOOKING FORM (Simulation Flow)
+- When a user clicks "Book Now":
+- Show form: Guest Name, Phone, Dates.
+- ID Verification: File Input with a "Skip for now" button.
+- Logic: If skipped, status = "Pending - ID Missing". If uploaded, status = "Pending".
+
+---
+DATA STRUCTURE (Supabase & Mock Schema):
+- Vehicles: id, model, plate, daily_rate, transmission, color_hex (e.g., #FF5733), status (available/maintenance), image_url.
+- Bookings: id, vehicle_id, guest_name, guest_phone, start_date, end_date, total_price, status (pending/confirmed/completed/cancelled), id_verified (boolean).
+
+DOCUMENTATION DELIVERABLES:
+1. Create a `README.md`: Explain the project purpose, the "Simulation" logic, and the folder structure.
+2. Create a `LOCAL_SETUP.md`:
+   - Step-by-step guide on how to run the app in "Mock Mode" (e.g., "Set VITE_USE_MOCK=true in .env").
+   - Guide on how to switch to Supabase later (providing the SQL schema).
+
+EXECUTION PLAN:
+1. Scaffold the React + Vite app.
+2. Create `mockData.json` with 5 dummy cars and 3 bookings.
+3. Build the `api.js` layer to handle the Mock/Supabase switch.
+4. Build the UI Components following the Blueprint above strictly.
+5. Assemble the pages with the Role Toggle logic.
+6. Generate the Documentation files.
