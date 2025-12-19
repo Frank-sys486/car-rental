@@ -1,21 +1,24 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { format } from "date-fns";
 import type { Vehicle, Booking, DashboardStats } from "@shared/schema";
 import { GanttChart } from "@/components/GanttChart";
 import { StatsCard } from "@/components/StatsCard";
 import { BookingDetailsModal } from "@/components/BookingDetailsModal";
+import { BookingEditDialog } from "@/components/BookingEditDialog";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/context/RoleContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Car, CalendarCheck, Banknote, LayoutDashboard, ShieldAlert, RefreshCw, AlertCircle } from "lucide-react";
+import { Car, CalendarCheck, Banknote, LayoutDashboard, ShieldAlert, RefreshCw, AlertCircle, TrendingUp } from "lucide-react";
 
 export default function Dashboard() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const { toast } = useToast();
   const { isAdmin } = useRole();
   const [, setLocation] = useLocation();
@@ -76,8 +79,8 @@ export default function Dashboard() {
   }
 
   const updateBookingMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      return apiRequest("PATCH", `/api/bookings/${id}`, { status });
+    mutationFn: async ({ id, ...updates }: Partial<Booking> & { id: string }) => {
+      return apiRequest("PATCH", `/api/bookings/${id}`, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
@@ -97,6 +100,20 @@ export default function Dashboard() {
       });
     },
   });
+
+  const handleEditBooking = (id: string, data: any) => {
+    updateBookingMutation.mutate({
+      id,
+      ...data,
+      startDate: format(data.startDate, "yyyy-MM-dd"),
+      endDate: format(data.endDate, "yyyy-MM-dd"),
+    }, {
+      onSuccess: () => {
+        setEditModalOpen(false);
+        setDetailsModalOpen(true);
+      }
+    });
+  };
 
   const handleBookingClick = (booking: Booking) => {
     setSelectedBooking(booking);
@@ -135,7 +152,7 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatsCard
           title="Total Cars"
           value={stats?.totalCars ?? 0}
@@ -155,6 +172,13 @@ export default function Dashboard() {
           value={`₱${(stats?.revenueToday ?? 0).toLocaleString()}`}
           icon={Banknote}
           description="From active bookings"
+          isLoading={statsLoading}
+        />
+        <StatsCard
+          title="Monthly Revenue"
+          value={`₱${(stats?.monthlyRevenue ?? 0).toLocaleString()}`}
+          icon={TrendingUp}
+          description="From completed bookings"
           isLoading={statsLoading}
         />
       </div>
@@ -199,6 +223,22 @@ export default function Dashboard() {
         onApprove={handleApprove}
         onComplete={handleComplete}
         onCancel={handleCancel}
+        onEdit={() => {
+          setDetailsModalOpen(false);
+          setEditModalOpen(true);
+        }}
+        isLoading={updateBookingMutation.isPending}
+      />
+
+      <BookingEditDialog
+        open={editModalOpen}
+        onOpenChange={(open) => {
+          setEditModalOpen(open);
+          if (!open) setDetailsModalOpen(true);
+        }}
+        booking={selectedBooking}
+        vehicles={vehicles || []}
+        onSubmit={handleEditBooking}
         isLoading={updateBookingMutation.isPending}
       />
     </div>

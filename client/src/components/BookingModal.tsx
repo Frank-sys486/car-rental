@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -39,8 +39,12 @@ interface BookingModalProps {
   vehicle: Vehicle | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: BookingFormValues & { idVerified: boolean }) => void;
+  onSubmit: (data: BookingFormValues & { idVerified: boolean; idImageUrl?: string }) => void;
   isLoading?: boolean;
+  defaultDates?: {
+    start?: Date;
+    end?: Date;
+  };
 }
 
 export function BookingModal({
@@ -49,18 +53,27 @@ export function BookingModal({
   onOpenChange,
   onSubmit,
   isLoading,
+  defaultDates,
 }: BookingModalProps) {
   const [idFile, setIdFile] = useState<File | null>(null);
+  const [idPreview, setIdPreview] = useState<string | null>(null);
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       guestName: "",
       guestPhone: "",
-      startDate: new Date(),
-      endDate: addDays(new Date(), 1),
+      startDate: defaultDates?.start || new Date(),
+      endDate: defaultDates?.end || addDays(new Date(), 1),
     },
   });
+
+  useEffect(() => {
+    if (open && defaultDates) {
+      if (defaultDates.start) form.setValue("startDate", defaultDates.start);
+      if (defaultDates.end) form.setValue("endDate", defaultDates.end);
+    }
+  }, [open, defaultDates, form]);
 
   const watchStartDate = form.watch("startDate");
   const watchEndDate = form.watch("endDate");
@@ -76,6 +89,7 @@ export function BookingModal({
     onSubmit({
       ...data,
       idVerified: !!idFile,
+      idImageUrl: idPreview || undefined,
     });
   };
 
@@ -83,11 +97,17 @@ export function BookingModal({
     const file = e.target.files?.[0];
     if (file) {
       setIdFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setIdPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const handleSkipId = () => {
     setIdFile(null);
+    setIdPreview(null);
   };
 
   if (!vehicle) return null;
@@ -111,7 +131,7 @@ export function BookingModal({
           <div className="flex-1 min-w-0">
             <p className="font-medium truncate">{vehicle.model}</p>
             <p className="text-sm text-muted-foreground">
-              ₱{vehicle.dailyRate.toLocaleString()}/day
+              ₱{vehicle.dailyRate.toLocaleString()}/{vehicle.rateType || "day"}
             </p>
           </div>
         </div>

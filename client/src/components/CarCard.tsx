@@ -1,76 +1,74 @@
 import type { Vehicle } from "@shared/schema";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useSearch } from "wouter";
+import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
-import { Settings2 } from "lucide-react";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Pencil, Trash2 } from "lucide-react";
 
 interface CarCardProps {
   vehicle: Vehicle;
   onBookNow: (vehicle: Vehicle) => void;
+  isAdmin?: boolean;
+  onEdit?: (vehicle: Vehicle) => void;
+  onDelete?: (vehicle: Vehicle) => void;
 }
 
-export function CarCard({ vehicle, onBookNow }: CarCardProps) {
+export function CarCard({ vehicle, onBookNow, isAdmin, onEdit, onDelete }: CarCardProps) {
+  const search = useSearch();
+  const hasDateSearch = new URLSearchParams(search).has("start");
+
   const isAvailable = vehicle.status === "available";
+  const isBookedInSearchRange = hasDateSearch && vehicle.status === "booked";
+
+  let button;
+  if (isAvailable) {
+    button = (
+      <Button onClick={() => onBookNow(vehicle)} data-testid={`book-now-${vehicle.id}`}>
+        Book Now
+      </Button>
+    );
+  } else if (isBookedInSearchRange && vehicle.nextAvailableDate) {
+    button = (
+      <Button variant="secondary" onClick={() => onBookNow(vehicle)} data-testid={`request-booking-${vehicle.id}`}>
+        Request from {format(parseISO(vehicle.nextAvailableDate), "MMM d")}
+      </Button>
+    );
+  } else {
+    button = (
+      <Button disabled variant="outline">
+        Unavailable
+      </Button>
+    );
+  }
+
+  const cardClasses = !isAvailable && !isBookedInSearchRange ? "opacity-60" : "";
 
   return (
-    <Card
-      className={`overflow-hidden transition-all duration-300 ${
-        !isAvailable ? "opacity-60 grayscale" : "hover-elevate"
-      }`}
-      data-testid={`card-vehicle-${vehicle.id}`}
-    >
-      <AspectRatio ratio={16 / 9} className="bg-muted">
-        <img
-          src={vehicle.imageUrl}
-          alt={vehicle.model}
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
-        {!isAvailable && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/80">
-            <Badge variant="secondary" className="gap-1">
-              <Settings2 className="h-3 w-3" />
-              Under Maintenance
-            </Badge>
+    <Card className={`overflow-hidden transition-opacity ${cardClasses}`}>
+      <div className="relative">
+        <img src={vehicle.imageUrl} alt={vehicle.model} className="aspect-video w-full object-cover" />
+        {isAdmin && (
+          <div className="absolute top-2 right-2 flex gap-2">
+            <Button size="icon" variant="secondary" className="h-8 w-8" onClick={() => onEdit?.(vehicle)}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button size="icon" variant="destructive" className="h-8 w-8" onClick={() => onDelete?.(vehicle)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         )}
-      </AspectRatio>
-
-      <div className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h3 className="font-semibold text-lg leading-tight" data-testid={`text-model-${vehicle.id}`}>
-              {vehicle.model}
-            </h3>
-            <p className="text-sm text-muted-foreground">{vehicle.plate}</p>
-          </div>
-          <Badge
-            variant="outline"
-            className="shrink-0 capitalize"
-            data-testid={`badge-transmission-${vehicle.id}`}
-          >
-            {vehicle.transmission === "auto" ? "Automatic" : "Manual"}
-          </Badge>
-        </div>
-
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <div>
-            <span className="text-2xl font-bold" data-testid={`text-price-${vehicle.id}`}>
-              ₱{vehicle.dailyRate.toLocaleString()}
-            </span>
-            <span className="text-sm text-muted-foreground">/day</span>
-          </div>
-          <Button
-            onClick={() => onBookNow(vehicle)}
-            disabled={!isAvailable}
-            className="min-h-[48px] px-6"
-            data-testid={`button-book-${vehicle.id}`}
-          >
-            Book Now
-          </Button>
-        </div>
       </div>
+      <CardContent className="p-4">
+        <div className="flex justify-between items-start">
+          <h3 className="font-bold text-lg">{vehicle.model}</h3>
+          <Badge variant={vehicle.transmission === "auto" ? "default" : "secondary"}>{vehicle.transmission}</Badge>
+        </div>
+      </CardContent>
+      <CardFooter className="p-4 pt-0 flex justify-between items-center">
+        <p><span className="font-bold text-lg">₱{vehicle.dailyRate.toLocaleString()}</span><span className="text-sm text-muted-foreground">/{vehicle.rateType || "day"}</span></p>
+        {button}
+      </CardFooter>
     </Card>
   );
 }

@@ -23,10 +23,6 @@ export function GanttChart({
     return Array.from({ length: days }, (_, i) => addDays(today, i));
   }, [today, days]);
 
-  const getBookingsForVehicle = (vehicleId: string) => {
-    return bookings.filter((b) => b.vehicleId === vehicleId);
-  };
-
   const getBookingPosition = (booking: Booking) => {
     const startDate = parseISO(booking.startDate);
     const endDate = parseISO(booking.endDate);
@@ -45,9 +41,50 @@ export function GanttChart({
   };
 
   const cellWidth = 48;
-  const rowHeight = 56;
   const headerHeight = 48;
   const vehicleLabelWidth = 160;
+  const barHeight = 32;
+  const barGap = 4;
+  const verticalPadding = 12;
+
+  const vehicleLayouts = useMemo(() => {
+    return vehicles.map((vehicle) => {
+      const vehicleBookings = bookings.filter((b) => b.vehicleId === vehicle.id);
+      
+      const sortedBookings = [...vehicleBookings].sort((a, b) => 
+        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+      );
+
+      const lanes: { booking: Booking; laneIndex: number }[] = [];
+      const laneEndDates: number[] = [];
+
+      sortedBookings.forEach((booking) => {
+        const start = parseISO(booking.startDate).getTime();
+        const end = parseISO(booking.endDate).getTime();
+        
+        let laneIndex = -1;
+        for (let i = 0; i < laneEndDates.length; i++) {
+          if (start > laneEndDates[i]) {
+            laneIndex = i;
+            laneEndDates[i] = end;
+            break;
+          }
+        }
+
+        if (laneIndex === -1) {
+          laneIndex = laneEndDates.length;
+          laneEndDates.push(end);
+        }
+
+        lanes.push({ booking, laneIndex });
+      });
+
+      const laneCount = Math.max(laneEndDates.length, 1);
+      const height = Math.max(56, verticalPadding * 2 + laneCount * barHeight + (laneCount - 1) * barGap);
+
+      return { vehicle, lanes, height };
+    });
+  }, [vehicles, bookings]);
 
   return (
     <div className="border rounded-lg overflow-hidden bg-card">
@@ -62,11 +99,11 @@ export function GanttChart({
           >
             Vehicles
           </div>
-          {vehicles.map((vehicle) => (
+          {vehicleLayouts.map(({ vehicle, height }) => (
             <div
               key={vehicle.id}
               className="flex items-center gap-2 px-4 border-b"
-              style={{ height: rowHeight }}
+              style={{ height }}
             >
               <div
                 className="w-3 h-3 rounded-full shrink-0"
@@ -107,14 +144,12 @@ export function GanttChart({
               })}
             </div>
 
-            {vehicles.map((vehicle) => {
-              const vehicleBookings = getBookingsForVehicle(vehicle.id);
-
+            {vehicleLayouts.map(({ vehicle, lanes, height }) => {
               return (
                 <div
                   key={vehicle.id}
                   className="relative flex border-b"
-                  style={{ height: rowHeight }}
+                  style={{ height }}
                 >
                   {dateColumns.map((date, i) => {
                     const isToday = differenceInDays(date, today) === 0;
@@ -131,26 +166,31 @@ export function GanttChart({
                     );
                   })}
 
-                  {vehicleBookings.map((booking) => {
+                  {lanes.map(({ booking, laneIndex }) => {
                     const position = getBookingPosition(booking);
                     if (!position) return null;
 
                     const showText = position.width >= 2;
+                    const isPending = booking.status.startsWith("pending");
 
                     return (
                       <button
                         key={booking.id}
                         onClick={() => onBookingClick(booking)}
-                        className="absolute top-2 bottom-2 rounded-md px-2 flex items-center overflow-hidden cursor-pointer transition-all hover:brightness-110 hover:scale-[1.02] active:scale-100"
+                        className="absolute rounded-md px-2 flex items-center overflow-hidden cursor-pointer transition-all hover:brightness-110 hover:scale-[1.02] active:scale-100"
                         style={{
                           left: position.left * cellWidth + 4,
                           width: position.width * cellWidth - 8,
-                          backgroundColor: vehicle.colorHex,
+                          top: verticalPadding + laneIndex * (barHeight + barGap),
+                          height: barHeight,
+                          backgroundColor: isPending ? "white" : vehicle.colorHex,
+                          border: isPending ? `2px solid ${vehicle.colorHex}` : "none",
+                          color: isPending ? vehicle.colorHex : "white",
                         }}
                         data-testid={`gantt-booking-${booking.id}`}
                       >
                         {showText && (
-                          <span className="text-white text-xs font-medium truncate drop-shadow-sm">
+                          <span className="text-xs font-medium truncate drop-shadow-sm" style={{ color: 'inherit' }}>
                             {booking.guestName}
                           </span>
                         )}

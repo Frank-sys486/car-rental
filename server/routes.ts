@@ -2,112 +2,88 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertBookingSchema, insertVehicleSchema } from "@shared/schema";
-import { z } from "zod";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
+export async function registerRoutes(server: Server, app: Express) {
   app.get("/api/vehicles", async (req, res) => {
-    try {
-      const vehicles = await storage.getVehicles();
-      res.json(vehicles);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch vehicles" });
-    }
+    const start = req.query.start as string | undefined;
+    const end = req.query.end as string | undefined;
+    const vehicles = await storage.getVehicles(start, end);
+    res.json(vehicles);
   });
 
   app.get("/api/vehicles/:id", async (req, res) => {
-    try {
-      const vehicle = await storage.getVehicle(req.params.id);
-      if (!vehicle) {
-        return res.status(404).json({ error: "Vehicle not found" });
-      }
-      res.json(vehicle);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch vehicle" });
+    const vehicle = await storage.getVehicle(req.params.id);
+    if (!vehicle) {
+      res.status(404).json({ message: "Vehicle not found" });
+      return;
     }
+    res.json(vehicle);
   });
 
   app.post("/api/vehicles", async (req, res) => {
-    try {
-      const validatedData = insertVehicleSchema.parse(req.body);
-      const vehicle = await storage.createVehicle(validatedData);
-      res.status(201).json(vehicle);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: error.errors });
-      }
-      res.status(500).json({ error: "Failed to create vehicle" });
+    const parsed = insertVehicleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(parsed.error);
+      return;
     }
+    const vehicle = await storage.createVehicle(parsed.data);
+    res.json(vehicle);
   });
 
   app.patch("/api/vehicles/:id", async (req, res) => {
-    try {
-      const vehicle = await storage.updateVehicle(req.params.id, req.body);
-      if (!vehicle) {
-        return res.status(404).json({ error: "Vehicle not found" });
-      }
-      res.json(vehicle);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update vehicle" });
+    const parsed = insertVehicleSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(parsed.error);
+      return;
     }
+    const vehicle = await storage.updateVehicle(req.params.id, req.body);
+    if (!vehicle) {
+      res.status(404).json({ message: "Vehicle not found" });
+      return;
+    }
+    res.json(vehicle);
+  });
+
+  app.delete("/api/vehicles/:id", async (req, res) => {
+    const success = await storage.deleteVehicle(req.params.id);
+    if (!success) {
+      res.status(404).json({ message: "Vehicle not found" });
+      return;
+    }
+    res.status(204).end();
   });
 
   app.get("/api/bookings", async (req, res) => {
-    try {
-      const bookings = await storage.getBookings();
-      res.json(bookings);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch bookings" });
-    }
-  });
-
-  app.get("/api/bookings/:id", async (req, res) => {
-    try {
-      const booking = await storage.getBooking(req.params.id);
-      if (!booking) {
-        return res.status(404).json({ error: "Booking not found" });
-      }
-      res.json(booking);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch booking" });
-    }
+    const bookings = await storage.getBookings();
+    res.json(bookings);
   });
 
   app.post("/api/bookings", async (req, res) => {
-    try {
-      const validatedData = insertBookingSchema.parse(req.body);
-      const booking = await storage.createBooking(validatedData);
-      res.status(201).json(booking);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: error.errors });
-      }
-      res.status(500).json({ error: "Failed to create booking" });
+    const parsed = insertBookingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(parsed.error);
+      return;
     }
+    const booking = await storage.createBooking(parsed.data);
+    res.json(booking);
   });
 
   app.patch("/api/bookings/:id", async (req, res) => {
-    try {
-      const booking = await storage.updateBooking(req.params.id, req.body);
-      if (!booking) {
-        return res.status(404).json({ error: "Booking not found" });
-      }
-      res.json(booking);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update booking" });
+    const parsed = insertBookingSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json(parsed.error);
+      return;
     }
+    const booking = await storage.updateBooking(req.params.id, req.body);
+    if (!booking) {
+      res.status(404).json({ message: "Booking not found" });
+      return;
+    }
+    res.json(booking);
   });
 
   app.get("/api/stats", async (req, res) => {
-    try {
-      const stats = await storage.getStats();
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch stats" });
-    }
+    const stats = await storage.getStats();
+    res.json(stats);
   });
-
-  return httpServer;
 }

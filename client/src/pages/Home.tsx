@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { format, addDays } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Search, CarFront, Sparkles, Shield, Clock } from "lucide-react";
@@ -42,111 +41,90 @@ export default function Home() {
             </p>
           </div>
 
-          <Card className="max-w-lg mx-auto p-0 overflow-hidden shadow-2xl">
-            <Tabs defaultValue="availability" className="w-full">
-              <TabsList className="w-full rounded-none h-14 p-0 bg-muted/50">
-                <TabsTrigger
-                  value="availability"
-                  className="flex-1 h-full rounded-none data-[state=active]:bg-background gap-2"
-                  data-testid="tab-availability"
-                >
-                  <Search className="h-4 w-4" />
-                  <span className="hidden sm:inline">Check</span> Availability
-                </TabsTrigger>
-                <TabsTrigger
-                  value="browse"
-                  className="flex-1 h-full rounded-none data-[state=active]:bg-background gap-2"
-                  data-testid="tab-browse"
-                >
-                  <CarFront className="h-4 w-4" />
-                  Browse Cars
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="availability" className="p-6 space-y-4 mt-0">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Pick-up Date</label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal min-h-[48px]"
-                          data-testid="button-pickup-date"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {startDate ? format(startDate, "MMM d") : "Select"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={startDate}
-                          onSelect={setStartDate}
-                          disabled={(date) => date < new Date()}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Return Date</label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal min-h-[48px]"
-                          data-testid="button-return-date"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {endDate ? format(endDate, "MMM d") : "Select"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={endDate}
-                          onSelect={setEndDate}
-                          disabled={(date) => !startDate ? false : date <= startDate}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+          <Card className="max-w-lg mx-auto p-6 shadow-2xl">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Pick-up Date</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal min-h-[48px]"
+                        data-testid="button-pickup-date"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, "MMM d") : "Select"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={setStartDate}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
-                <Button
-                  onClick={handleSearch}
-                  className="w-full min-h-[48px] text-base gap-2"
-                  data-testid="button-search-cars"
-                >
-                  <Search className="h-4 w-4" />
-                  Search Available Cars
-                </Button>
-              </TabsContent>
-
-              <TabsContent value="browse" className="p-6 mt-0">
-                <div className="text-center space-y-4">
-                  <div className="p-4 rounded-full bg-primary/10 w-fit mx-auto">
-                    <CarFront className="h-8 w-8 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">Explore Our Fleet</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Browse all available vehicles and find your perfect ride
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => setLocation("/fleet")}
-                    className="w-full min-h-[48px] text-base"
-                    data-testid="button-view-fleet"
-                  >
-                    View All Vehicles
-                  </Button>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Return Date</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal min-h-[48px]"
+                        data-testid="button-return-date"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, "MMM d") : "Select"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={setEndDate}
+                        disabled={(date) => !startDate ? false : date <= startDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
-              </TabsContent>
-            </Tabs>
+              </div>
+
+              <Button
+                onClick={handleSearch}
+                className="w-full min-h-[48px] text-base gap-2"
+                data-testid="button-search-cars"
+              >
+                <Search className="h-4 w-4" />
+                Search Available Cars
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">
+                    Or
+                  </span>
+                </div>
+              </div>
+
+              <Button
+                variant="secondary"
+                onClick={() => setLocation("/fleet")}
+                className="w-full min-h-[48px] text-base gap-2"
+                data-testid="button-view-fleet"
+              >
+                <CarFront className="h-4 w-4" />
+                Browse All Vehicles
+              </Button>
+            </div>
           </Card>
         </div>
       </section>

@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Phone, User, Calendar, Car, Check, X, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Phone, User, Calendar, Car, Check, X, AlertCircle, CheckCircle2, Pencil } from "lucide-react";
 
 interface BookingDetailsModalProps {
   booking: Booking | null;
@@ -19,6 +19,7 @@ interface BookingDetailsModalProps {
   onApprove: (bookingId: string) => void;
   onComplete: (bookingId: string) => void;
   onCancel: (bookingId: string) => void;
+  onEdit?: () => void;
   isLoading?: boolean;
 }
 
@@ -30,6 +31,7 @@ export function BookingDetailsModal({
   onApprove,
   onComplete,
   onCancel,
+  onEdit,
   isLoading,
 }: BookingDetailsModalProps) {
   if (!booking || !vehicle) return null;
@@ -71,8 +73,15 @@ export function BookingDetailsModal({
       <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-2 pr-8">
-            Booking Details
-            {getStatusBadge(booking.status, booking.idVerified)}
+            <span>Booking Details</span>
+            <div className="flex items-center gap-2">
+              {getStatusBadge(booking.status, booking.idVerified)}
+              {onEdit && (
+                <Button variant="ghost" size="icon" onClick={onEdit} className="h-8 w-8">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
 

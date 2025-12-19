@@ -1,12 +1,13 @@
 import type { Vehicle, Booking, InsertVehicle, InsertBooking, DashboardStats } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { format, isWithinInterval, parseISO } from "date-fns";
+import { format, isWithinInterval, parseISO, areIntervalsOverlapping, max, addDays, startOfMonth, endOfMonth } from "date-fns";
 
 export interface IStorage {
-  getVehicles(): Promise<Vehicle[]>;
+  getVehicles(start?: string, end?: string): Promise<Vehicle[]>;
   getVehicle(id: string): Promise<Vehicle | undefined>;
   createVehicle(vehicle: InsertVehicle): Promise<Vehicle>;
   updateVehicle(id: string, updates: Partial<Vehicle>): Promise<Vehicle | undefined>;
+  deleteVehicle(id: string): Promise<boolean>;
   
   getBookings(): Promise<Booking[]>;
   getBooking(id: string): Promise<Booking | undefined>;
@@ -38,6 +39,7 @@ export class MemStorage implements IStorage {
         colorHex: "#3B82F6",
         status: "available",
         imageUrl: "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=800&q=80",
+        rateType: "24hr",
       },
       {
         id: "v2",
@@ -48,6 +50,7 @@ export class MemStorage implements IStorage {
         colorHex: "#10B981",
         status: "available",
         imageUrl: "https://images.unsplash.com/photo-1606611013016-969c19ba27bb?w=800&q=80",
+        rateType: "24hr",
       },
       {
         id: "v3",
@@ -58,6 +61,7 @@ export class MemStorage implements IStorage {
         colorHex: "#F59E0B",
         status: "available",
         imageUrl: "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=800&q=80",
+        rateType: "24hr",
       },
       {
         id: "v4",
@@ -68,6 +72,7 @@ export class MemStorage implements IStorage {
         colorHex: "#8B5CF6",
         status: "maintenance",
         imageUrl: "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=800&q=80",
+        rateType: "24hr",
       },
       {
         id: "v5",
@@ -78,6 +83,7 @@ export class MemStorage implements IStorage {
         colorHex: "#EF4444",
         status: "available",
         imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800&q=80",
+        rateType: "24hr",
       },
     ];
 
@@ -99,6 +105,7 @@ export class MemStorage implements IStorage {
         totalPrice: 4500,
         status: "confirmed",
         idVerified: true,
+        idImageUrl: null,
       },
       {
         id: "b2",
@@ -110,6 +117,7 @@ export class MemStorage implements IStorage {
         totalPrice: 5400,
         status: "pending",
         idVerified: false,
+        idImageUrl: null,
       },
       {
         id: "b3",
@@ -121,6 +129,7 @@ export class MemStorage implements IStorage {
         totalPrice: 6600,
         status: "confirmed",
         idVerified: true,
+        idImageUrl: null,
       },
     ];
 
@@ -128,8 +137,54 @@ export class MemStorage implements IStorage {
     mockBookings.forEach((b) => this.bookings.set(b.id, b));
   }
 
-  async getVehicles(): Promise<Vehicle[]> {
-    return Array.from(this.vehicles.values());
+  private updateExpiredBookings() {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    this.bookings.forEach((booking) => {
+      if (booking.status === "confirmed" && booking.endDate < todayStr) {
+        booking.status = "completed";
+        this.bookings.set(booking.id, booking);
+      }
+    });
+  }
+
+  async getVehicles(start?: string, end?: string): Promise<Vehicle[]> {
+    this.updateExpiredBookings();
+    const allVehicles = Array.from(this.vehicles.values());
+    const allBookings = Array.from(this.bookings.values());
+
+    if (!start || !end) {
+      return allVehicles.map(v => ({
+        ...v,
+        status: v.status === 'maintenance' ? 'maintenance' : 'available'
+      }));
+    }
+
+    const searchInterval = {
+      start: parseISO(start),
+      end: parseISO(end),
+    };
+
+    return allVehicles.map((vehicle) => {
+      if (vehicle.status === "maintenance") {
+        return { ...vehicle, status: "maintenance" };
+      }
+
+      const vehicleBookings = allBookings.filter(
+        (b) => b.vehicleId === vehicle.id && b.status !== 'cancelled'
+      );
+
+      const isBookedInSearchRange = vehicleBookings.some((booking) =>
+        areIntervalsOverlapping(searchInterval, { start: parseISO(booking.startDate), end: parseISO(booking.endDate) })
+      );
+
+      if (isBookedInSearchRange) {
+        const lastBookingEnd = max(vehicleBookings.map((b) => parseISO(b.endDate)));
+        const nextAvailable = addDays(lastBookingEnd, 1);
+        return { ...vehicle, status: "booked", nextAvailableDate: format(nextAvailable, "yyyy-MM-dd") };
+      }
+
+      return { ...vehicle, status: "available" };
+    });
   }
 
   async getVehicle(id: string): Promise<Vehicle | undefined> {
@@ -155,7 +210,12 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  async deleteVehicle(id: string): Promise<boolean> {
+    return this.vehicles.delete(id);
+  }
+
   async getBookings(): Promise<Booking[]> {
+    this.updateExpiredBookings();
     return Array.from(this.bookings.values());
   }
 
@@ -164,6 +224,7 @@ export class MemStorage implements IStorage {
   }
 
   async getBookingsByVehicle(vehicleId: string): Promise<Booking[]> {
+    this.updateExpiredBookings();
     return Array.from(this.bookings.values()).filter(
       (b) => b.vehicleId === vehicleId
     );
@@ -176,6 +237,7 @@ export class MemStorage implements IStorage {
       id,
       status: booking.status || "pending",
       idVerified: booking.idVerified ?? false,
+      idImageUrl: booking.idImageUrl ?? null,
     };
     this.bookings.set(id, newBooking);
     return newBooking;
@@ -190,16 +252,18 @@ export class MemStorage implements IStorage {
   }
 
   async getStats(): Promise<DashboardStats> {
+    this.updateExpiredBookings();
     const vehicles = Array.from(this.vehicles.values());
     const bookings = Array.from(this.bookings.values());
-    const today = format(new Date(), "yyyy-MM-dd");
+    const today = new Date();
+    const todayStr = format(today, "yyyy-MM-dd");
 
     const activeBookings = bookings.filter((b) => {
       if (b.status === "cancelled" || b.status === "completed") return false;
       try {
         const start = parseISO(b.startDate);
         const end = parseISO(b.endDate);
-        const todayDate = parseISO(today);
+        const todayDate = parseISO(todayStr);
         return isWithinInterval(todayDate, { start, end });
       } catch {
         return false;
@@ -208,10 +272,26 @@ export class MemStorage implements IStorage {
 
     const revenueToday = activeBookings.reduce((sum, b) => sum + b.totalPrice, 0);
 
+    const startOfCurrentMonth = startOfMonth(today);
+    const endOfCurrentMonth = endOfMonth(today);
+
+    const monthlyCompletedBookings = bookings.filter((b) => {
+      if (b.status !== "completed") return false;
+      try {
+        const bookingEndDate = parseISO(b.endDate);
+        return isWithinInterval(bookingEndDate, { start: startOfCurrentMonth, end: endOfCurrentMonth });
+      } catch {
+        return false;
+      }
+    });
+
+    const monthlyRevenue = monthlyCompletedBookings.reduce((sum, b) => sum + b.totalPrice, 0);
+
     return {
       totalCars: vehicles.length,
       rentedToday: activeBookings.length,
       revenueToday,
+      monthlyRevenue,
     };
   }
 }

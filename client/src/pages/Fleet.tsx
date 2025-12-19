@@ -1,19 +1,25 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch } from "wouter";
-import { format, differenceInDays, parseISO } from "date-fns";
-import type { Vehicle, InsertBooking } from "@shared/schema";
+import { format, differenceInDays, parseISO, addDays } from "date-fns";
+import type { Vehicle, InsertBooking, InsertVehicle } from "@shared/schema";
 import { CarCard } from "@/components/CarCard";
 import { BookingModal } from "@/components/BookingModal";
+import { VehicleDialog } from "@/components/VehicleDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useRole } from "@/context/RoleContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { CarFront, AlertCircle } from "lucide-react";
+import { CarFront, AlertCircle, Plus } from "lucide-react";
 
 export default function Fleet() {
+  const { isAdmin } = useRole();
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
   const { toast } = useToast();
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
@@ -21,7 +27,7 @@ export default function Fleet() {
   const endDateParam = searchParams.get("end");
 
   const { data: vehicles, isLoading, error } = useQuery<Vehicle[]>({
-    queryKey: ["/api/vehicles"],
+    queryKey: [`/api/vehicles${searchString ? (searchString.startsWith("?") ? searchString : `?${searchString}`) : ""}`],
   });
 
   const createBookingMutation = useMutation({
@@ -47,6 +53,40 @@ export default function Fleet() {
     },
   });
 
+  const createVehicleMutation = useMutation({
+    mutationFn: async (data: InsertVehicle) => {
+      return apiRequest("POST", "/api/vehicles", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vehicles"] });
+      setVehicleDialogOpen(false);
+      toast({ title: "Vehicle Added", description: "New vehicle has been added to the fleet." });
+    },
+  });
+
+  const updateVehicleMutation = useMutation({
+    mutationFn: async (data: InsertVehicle & { id: string }) => {
+      const { id, ...updates } = data;
+      return apiRequest("PATCH", `/api/vehicles/${id}`, updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vehicles"] });
+      setVehicleDialogOpen(false);
+      setEditingVehicle(null);
+      toast({ title: "Vehicle Updated", description: "Vehicle details have been updated." });
+    },
+  });
+
+  const deleteVehicleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/vehicles/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vehicles"] });
+      toast({ title: "Vehicle Deleted", description: "Vehicle has been removed from the fleet." });
+    },
+  });
+
   const handleBookNow = (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
     setBookingModalOpen(true);
@@ -58,6 +98,7 @@ export default function Fleet() {
     startDate: Date;
     endDate: Date;
     idVerified: boolean;
+    idImageUrl?: string;
   }) => {
     if (!selectedVehicle) return;
 
@@ -73,9 +114,34 @@ export default function Fleet() {
       totalPrice,
       status: data.idVerified ? "pending" : "pending_id_missing",
       idVerified: data.idVerified,
+      idImageUrl: data.idImageUrl,
     };
 
     createBookingMutation.mutate(bookingData);
+  };
+
+  const handleAddVehicle = () => {
+    setEditingVehicle(null);
+    setVehicleDialogOpen(true);
+  };
+
+  const handleEditVehicle = (vehicle: Vehicle) => {
+    setEditingVehicle(vehicle);
+    setVehicleDialogOpen(true);
+  };
+
+  const handleDeleteVehicle = (vehicle: Vehicle) => {
+    if (confirm(`Are you sure you want to delete ${vehicle.model}?`)) {
+      deleteVehicleMutation.mutate(vehicle.id);
+    }
+  };
+
+  const handleVehicleSubmit = (data: InsertVehicle) => {
+    if (editingVehicle) {
+      updateVehicleMutation.mutate({ ...data, id: editingVehicle.id });
+    } else {
+      createVehicleMutation.mutate(data);
+    }
   };
 
   if (error) {
@@ -94,24 +160,33 @@ export default function Fleet() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-2">Our Fleet</h1>
-        <p className="text-muted-foreground">
-          {startDateParam && endDateParam ? (
-            <>
-              Showing available cars from{" "}
-              <span className="font-medium text-foreground">
-                {format(parseISO(startDateParam), "MMM d, yyyy")}
-              </span>{" "}
-              to{" "}
-              <span className="font-medium text-foreground">
-                {format(parseISO(endDateParam), "MMM d, yyyy")}
-              </span>
-            </>
-          ) : (
-            "Browse and book from our selection of quality vehicles"
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Our Fleet</h1>
+          <p className="text-muted-foreground">
+            {startDateParam && endDateParam ? (
+              <>
+                Showing available cars from{" "}
+                <span className="font-medium text-foreground">
+                  {format(parseISO(startDateParam), "MMM d, yyyy")}
+                </span>{" "}
+                to{" "}
+                <span className="font-medium text-foreground">
+                  {format(parseISO(endDateParam), "MMM d, yyyy")}
+                </span>
+              </>
+            ) : (
+              "Browse and book from our selection of quality vehicles"
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button size="sm" onClick={handleAddVehicle}>
+              <Plus className="mr-2 h-4 w-4" /> Add Vehicle
+            </Button>
           )}
-        </p>
+        </div>
       </div>
 
       {isLoading ? (
@@ -139,6 +214,9 @@ export default function Fleet() {
               key={vehicle.id}
               vehicle={vehicle}
               onBookNow={handleBookNow}
+              isAdmin={isAdmin}
+              onEdit={handleEditVehicle}
+              onDelete={handleDeleteVehicle}
             />
           ))}
         </div>
@@ -158,6 +236,24 @@ export default function Fleet() {
         onOpenChange={setBookingModalOpen}
         onSubmit={handleBookingSubmit}
         isLoading={createBookingMutation.isPending}
+        defaultDates={
+          selectedVehicle?.nextAvailableDate
+            ? {
+                start: parseISO(selectedVehicle.nextAvailableDate),
+                end: addDays(parseISO(selectedVehicle.nextAvailableDate), 1),
+              }
+            : startDateParam && endDateParam
+            ? { start: parseISO(startDateParam), end: parseISO(endDateParam) }
+            : undefined
+        }
+      />
+
+      <VehicleDialog
+        open={vehicleDialogOpen}
+        onOpenChange={setVehicleDialogOpen}
+        onSubmit={handleVehicleSubmit}
+        vehicle={editingVehicle}
+        isLoading={createVehicleMutation.isPending || updateVehicleMutation.isPending}
       />
     </div>
   );
