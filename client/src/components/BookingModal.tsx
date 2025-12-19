@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { format, differenceInDays, addDays } from "date-fns";
+import { format, differenceInDays, addDays, parseISO, isSameDay } from "date-fns";
 import type { Vehicle } from "@shared/schema";
 import {
   Dialog,
@@ -25,6 +26,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { CalendarIcon, Upload, AlertCircle, Check } from "lucide-react";
+import { useRole } from "@/context/RoleContext";
+import { getCustomers, getBookingsByVehicleId, type Customer, type Booking } from "@/lib/data";
 
 const bookingFormSchema = z.object({
   guestName: z.string().min(2, "Name must be at least 2 characters"),
@@ -57,6 +60,8 @@ export function BookingModal({
 }: BookingModalProps) {
   const [idFile, setIdFile] = useState<File | null>(null);
   const [idPreview, setIdPreview] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const { isAdmin } = useRole();
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -66,6 +71,18 @@ export function BookingModal({
       startDate: defaultDates?.start || new Date(),
       endDate: defaultDates?.end || addDays(new Date(), 1),
     },
+  });
+
+  const { data: customers } = useQuery<Customer[]>({
+    queryKey: ["customers"],
+    queryFn: getCustomers,
+    enabled: isAdmin && open,
+  });
+
+  const { data: vehicleBookings } = useQuery<Booking[]>({
+    queryKey: ["bookings", vehicle?.id],
+    queryFn: () => getBookingsByVehicleId(vehicle!.id),
+    enabled: !!vehicle && open,
   });
 
   useEffect(() => {
@@ -85,10 +102,29 @@ export function BookingModal({
 
   const totalPrice = vehicle ? vehicle.dailyRate * numberOfDays : 0;
 
+  const bookedDays = useMemo(() => {
+    if (!vehicleBookings) return [];
+    const dates: Date[] = [];
+    vehicleBookings.forEach(booking => {
+        // Don't count cancelled or archived bookings as unavailable
+        if (booking.status === 'cancelled' || booking.status === 'archived') return;
+
+        let currentDate = parseISO(booking.startDate);
+        const endDate = parseISO(booking.endDate);
+
+        while (currentDate <= endDate) {
+            // Always add every day within the booking range to the list
+            dates.push(new Date(currentDate));
+            currentDate = addDays(currentDate, 1);
+        }
+    });
+    return dates;
+  }, [vehicleBookings, watchStartDate, watchEndDate]);
+
   const handleSubmit = (data: BookingFormValues) => {
     onSubmit({
       ...data,
-      idVerified: !!idFile,
+      idVerified: !!idFile || !!idPreview,
       idImageUrl: idPreview || undefined,
     });
   };
@@ -108,6 +144,16 @@ export function BookingModal({
   const handleSkipId = () => {
     setIdFile(null);
     setIdPreview(null);
+  };
+
+  const handleSelectCustomer = (customer: Customer) => {
+    form.setValue("guestName", customer.name);
+    form.setValue("guestPhone", customer.phone);
+    if (customer.idImageUrl) {
+      setIdPreview(customer.idImageUrl);
+      setIdFile(null); // Clear file if using saved image
+    }
+    setShowSuggestions(false);
   };
 
   if (!vehicle) return null;
@@ -144,12 +190,35 @@ export function BookingModal({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Juan dela Cruz"
-                      {...field}
-                      data-testid="input-guest-name"
-                    />
+                  <FormControl className="relative">
+                    <div>
+                      <Input
+                        placeholder="Juan dela Cruz"
+                        {...field}
+                        data-testid="input-guest-name"
+                        onFocus={() => isAdmin && setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          if (isAdmin) setShowSuggestions(true);
+                        }}
+                      />
+                      {showSuggestions && customers && customers.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                          {customers
+                            .filter(c => c.name.toLowerCase().includes(field.value.toLowerCase()))
+                            .map((customer, idx) => (
+                              <div
+                                key={idx}
+                                className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => handleSelectCustomer(customer)}
+                              >
+                                {customer.name}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -201,6 +270,13 @@ export function BookingModal({
                           onSelect={field.onChange}
                           disabled={(date) => date < new Date()}
                           initialFocus
+                          modifiers={{ booked: bookedDays }}
+                          modifiersStyles={{
+                            booked: {
+                              color: "hsl(var(--destructive-foreground))",
+                              backgroundColor: "hsl(var(--destructive))",
+                            }
+                          }}
                         />
                       </PopoverContent>
                     </Popover>
@@ -235,6 +311,13 @@ export function BookingModal({
                           onSelect={field.onChange}
                           disabled={(date) => date <= watchStartDate}
                           initialFocus
+                          modifiers={{ booked: bookedDays }}
+                          modifiersStyles={{
+                            booked: {
+                              color: "hsl(var(--destructive-foreground))",
+                              backgroundColor: "hsl(var(--destructive))",
+                            }
+                          }}
                         />
                       </PopoverContent>
                     </Popover>
@@ -249,7 +332,7 @@ export function BookingModal({
               <div className="border-2 border-dashed rounded-lg p-4 text-center">
                 {idFile ? (
                   <div className="flex items-center justify-center gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-500" />
+                    <Check className="h-4 w-4 text-green-500 shrink-0" />
                     <span className="truncate max-w-[200px]">{idFile.name}</span>
                     <Button
                       type="button"
@@ -258,6 +341,19 @@ export function BookingModal({
                       onClick={() => setIdFile(null)}
                     >
                       Remove
+                    </Button>
+                  </div>
+                ) : idPreview ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <img src={idPreview} alt="ID Preview" className="h-24 object-contain rounded-md border" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIdPreview(null)}
+                      className="text-xs h-7"
+                    >
+                      Remove Image
                     </Button>
                   </div>
                 ) : (
@@ -292,7 +388,7 @@ export function BookingModal({
                   </div>
                 )}
               </div>
-              {!idFile && (
+              {!idFile && !idPreview && (
                 <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
                   <AlertCircle className="h-3 w-3" />
                   Booking will be marked as "Pending - ID Missing"
@@ -309,8 +405,8 @@ export function BookingModal({
                   ₱{totalPrice.toLocaleString()}
                 </p>
               </div>
-              <Badge variant={idFile ? "default" : "secondary"}>
-                {idFile ? "ID Verified" : "Pending ID"}
+              <Badge variant={idFile || idPreview ? "default" : "secondary"}>
+                {idFile || idPreview ? "ID Verified" : "Pending ID"}
               </Badge>
             </div>
 

@@ -58,6 +58,11 @@ export async function registerRoutes(server: Server, app: Express) {
     res.json(bookings);
   });
 
+  app.get("/api/bookings/vehicle/:vehicleId", async (req, res) => {
+    const bookings = await storage.getBookingsByVehicle(req.params.vehicleId);
+    res.json(bookings);
+  });
+
   app.post("/api/bookings", async (req, res) => {
     const parsed = insertBookingSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -85,5 +90,14 @@ export async function registerRoutes(server: Server, app: Express) {
   app.get("/api/stats", async (req, res) => {
     const stats = await storage.getStats();
     res.json(stats);
+  });
+
+  app.post("/api/customers/update", async (req, res) => {
+    const { oldName, newDetails } = req.body;
+    if (!oldName || !newDetails) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+    await storage.updateCustomer(oldName, newDetails);
+    res.json({ success: true });
   });
 }

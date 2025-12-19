@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Phone, User, Calendar, Car, Check, X, AlertCircle, CheckCircle2, Pencil } from "lucide-react";
+import { Phone, User, Calendar, Car, Check, X, AlertCircle, CheckCircle2, Pencil, Trash2 } from "lucide-react";
 
 interface BookingDetailsModalProps {
   booking: Booking | null;
@@ -19,6 +19,7 @@ interface BookingDetailsModalProps {
   onApprove: (bookingId: string) => void;
   onComplete: (bookingId: string) => void;
   onCancel: (bookingId: string) => void;
+  onDelete?: (bookingId: string) => void;
   onEdit?: () => void;
   isLoading?: boolean;
 }
@@ -31,6 +32,7 @@ export function BookingDetailsModal({
   onApprove,
   onComplete,
   onCancel,
+  onDelete,
   onEdit,
   isLoading,
 }: BookingDetailsModalProps) {
@@ -191,6 +193,19 @@ export function BookingDetailsModal({
             >
               <CheckCircle2 className="h-4 w-4" />
               Mark as Completed
+            </Button>
+          )}
+
+          {booking.status === "cancelled" && (
+            <Button
+              variant="destructive"
+              className="w-full min-h-[48px] gap-2"
+              onClick={() => onDelete?.(booking.id)}
+              disabled={isLoading}
+              data-testid="button-delete-booking"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Booking
             </Button>
           )}
         </div>

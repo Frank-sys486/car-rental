@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const vehicleStatusSchema = z.enum(["available", "maintenance", "booked"]);
-export const bookingStatusSchema = z.enum(["pending", "pending_id_missing", "confirmed", "completed", "cancelled"]);
+export const bookingStatusSchema = z.enum(["pending", "pending_id_missing", "confirmed", "completed", "cancelled", "archived"]);
 export const transmissionSchema = z.enum(["auto", "manual"]);
 
 export const vehicleSchema = z.object({

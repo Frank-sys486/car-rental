@@ -15,6 +15,7 @@ export interface IStorage {
   createBooking(booking: InsertBooking): Promise<Booking>;
   updateBooking(id: string, updates: Partial<Booking>): Promise<Booking | undefined>;
   
+  updateCustomer(oldName: string, newDetails: { name: string; phone: string; idImageUrl?: string | null }): Promise<void>;
   getStats(): Promise<DashboardStats>;
 }
 
@@ -251,6 +252,20 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  async updateCustomer(oldName: string, newDetails: { name: string; phone: string; idImageUrl?: string | null }): Promise<void> {
+    this.bookings.forEach((booking, id) => {
+      if (booking.guestName === oldName) {
+        const updatedBooking = {
+          ...booking,
+          guestName: newDetails.name,
+          guestPhone: newDetails.phone,
+          idImageUrl: newDetails.idImageUrl !== undefined ? newDetails.idImageUrl : booking.idImageUrl,
+        };
+        this.bookings.set(id, updatedBooking);
+      }
+    });
+  }
+
   async getStats(): Promise<DashboardStats> {
     this.updateExpiredBookings();
     const vehicles = Array.from(this.vehicles.values());
@@ -259,7 +274,7 @@ export class MemStorage implements IStorage {
     const todayStr = format(today, "yyyy-MM-dd");
 
     const activeBookings = bookings.filter((b) => {
-      if (b.status === "cancelled" || b.status === "completed") return false;
+      if (b.status === "cancelled" || b.status === "completed" || b.status === "archived") return false;
       try {
         const start = parseISO(b.startDate);
         const end = parseISO(b.endDate);

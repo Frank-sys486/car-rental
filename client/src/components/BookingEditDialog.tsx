@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,6 +14,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { CalendarIcon, Upload, X } from "lucide-react";
+import { useRole } from "@/context/RoleContext";
+import { getCustomers, type Customer } from "@/lib/data";
 
 const editBookingSchema = z.object({
   guestName: z.string().min(1, "Name is required"),
@@ -61,6 +64,14 @@ export function BookingEditDialog({
   });
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const { isAdmin } = useRole();
+
+  const { data: customers } = useQuery<Customer[]>({
+    queryKey: ["customers"],
+    queryFn: getCustomers,
+    enabled: isAdmin && open,
+  });
 
   useEffect(() => {
     if (open) {
@@ -136,6 +147,17 @@ export function BookingEditDialog({
     form.setValue("idVerified", false);
   };
 
+  const handleSelectCustomer = (customer: Customer) => {
+    form.setValue("guestName", customer.name);
+    form.setValue("guestPhone", customer.phone);
+    if (customer.idImageUrl) {
+      setImagePreview(customer.idImageUrl);
+      form.setValue("idImageUrl", customer.idImageUrl);
+      form.setValue("idVerified", true);
+    }
+    setShowSuggestions(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -150,7 +172,35 @@ export function BookingEditDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Guest Name</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
+                  <FormControl className="relative">
+                    <div>
+                      <Input 
+                        {...field} 
+                        onFocus={() => isAdmin && setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          if (isAdmin) setShowSuggestions(true);
+                        }}
+                        autoComplete="off"
+                      />
+                      {showSuggestions && customers && customers.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                          {customers
+                            .filter(c => c.name.toLowerCase().includes(field.value.toLowerCase()))
+                            .map((customer, idx) => (
+                              <div
+                                key={idx}
+                                className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => handleSelectCustomer(customer)}
+                              >
+                                {customer.name}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

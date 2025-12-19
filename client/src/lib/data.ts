@@ -1,11 +1,37 @@
 import { db } from "./firebase";
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, writeBatch, onSnapshot } from "firebase/firestore";
 import { apiRequest } from "./queryClient";
 import type { Vehicle, Booking, InsertVehicle, InsertBooking, DashboardStats } from "@shared/schema";
 import { format, isWithinInterval, parseISO, areIntervalsOverlapping, max, addDays, startOfMonth, endOfMonth } from "date-fns";
 
 // Helper to check if we should use Firebase
 const useFirebase = () => !!db;
+
+export function isFirebaseEnabled() {
+  return !!db;
+}
+
+export function subscribeToVehicles(callback: (data: Vehicle[]) => void): () => void {
+  if (useFirebase()) {
+    const q = collection(db!, "vehicles");
+    return onSnapshot(q, (snapshot) => {
+      const vehicles = snapshot.docs.map(doc => doc.data() as Vehicle);
+      callback(vehicles);
+    });
+  }
+  return () => {};
+}
+
+export function subscribeToBookings(callback: (data: Booking[]) => void): () => void {
+  if (useFirebase()) {
+    const q = collection(db!, "bookings");
+    return onSnapshot(q, (snapshot) => {
+      const bookings = snapshot.docs.map(doc => doc.data() as Booking);
+      callback(bookings);
+    });
+  }
+  return () => {};
+}
 
 export async function getVehicles(start?: string, end?: string): Promise<Vehicle[]> {
   if (useFirebase()) {
@@ -130,6 +156,37 @@ export async function updateBooking(id: string, updates: Partial<Booking>): Prom
   return res.json();
 }
 
+export async function getBookingsByVehicleId(vehicleId: string): Promise<Booking[]> {
+  if (useFirebase()) {
+    const q = query(collection(db!, "bookings"), where("vehicleId", "==", vehicleId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Booking);
+  }
+  const res = await apiRequest("GET", `/api/bookings/vehicle/${vehicleId}`);
+  return res.json();
+}
+
+export async function updateCustomer(oldName: string, newDetails: { name: string; phone: string; idImageUrl?: string | null }): Promise<void> {
+  if (useFirebase()) {
+    const q = query(collection(db!, "bookings"), where("guestName", "==", oldName));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return;
+
+    const batch = writeBatch(db!);
+    querySnapshot.forEach((doc) => {
+      batch.update(doc.ref, { 
+        guestName: newDetails.name,
+        guestPhone: newDetails.phone,
+        idImageUrl: newDetails.idImageUrl,
+      });
+    });
+    await batch.commit();
+    return;
+  }
+  await apiRequest("POST", "/api/customers/update", { oldName, newDetails });
+}
+
 export async function getStats(): Promise<DashboardStats> {
   if (useFirebase()) {
     // Calculate stats on client
@@ -140,7 +197,7 @@ export async function getStats(): Promise<DashboardStats> {
     const todayStr = format(today, "yyyy-MM-dd");
 
     const activeBookings = bookings.filter((b) => {
-      if (b.status === "cancelled" || b.status === "completed") return false;
+      if (b.status === "cancelled" || b.status === "completed" || b.status === "archived") return false;
       try {
         const start = parseISO(b.startDate);
         const end = parseISO(b.endDate);
@@ -179,7 +236,7 @@ export async function getStats(): Promise<DashboardStats> {
   return res.json();
 }
 
-async function updateExpiredBookings() {
+export async function updateExpiredBookings() {
   if (!db) return;
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const q = query(
@@ -196,4 +253,45 @@ async function updateExpiredBookings() {
     });
     await batch.commit();
   }
+}
+
+export interface Customer {
+  name: string;
+  phone: string;
+  idImageUrl?: string | null;
+  totalBookings: number;
+  lastBooking: string;
+}
+
+export async function getCustomers(): Promise<Customer[]> {
+  const bookings = await getBookings();
+  const customerMap = new Map<string, Customer>();
+  
+  // Sort by date so we have latest info
+  const sortedBookings = [...bookings].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+  sortedBookings.forEach(booking => {
+    if (booking.status !== 'confirmed' && booking.status !== 'completed') return;
+
+    const key = booking.guestName.trim().toLowerCase();
+    const existing = customerMap.get(key);
+
+    if (!existing) {
+      customerMap.set(key, {
+        name: booking.guestName,
+        phone: booking.guestPhone,
+        idImageUrl: booking.idImageUrl,
+        totalBookings: 1,
+        lastBooking: booking.startDate
+      });
+    } else {
+      existing.totalBookings++;
+      existing.lastBooking = booking.startDate;
+      existing.phone = booking.guestPhone;
+      if (booking.idImageUrl) existing.idImageUrl = booking.idImageUrl;
+      existing.name = booking.guestName; // Update casing
+    }
+  });
+
+  return Array.from(customerMap.values()).sort((a, b) => new Date(b.lastBooking).getTime() - new Date(a.lastBooking).getTime());
 }

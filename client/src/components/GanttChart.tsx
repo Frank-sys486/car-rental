@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { format, addDays, differenceInDays, isWithinInterval, parseISO } from "date-fns";
+import { format, addDays, differenceInDays, isWithinInterval, parseISO, startOfDay } from "date-fns";
 import type { Booking, Vehicle } from "@shared/schema";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
@@ -17,7 +17,7 @@ export function GanttChart({
   days = 30,
 }: GanttChartProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const today = useMemo(() => new Date(), []);
+  const today = useMemo(() => startOfDay(new Date()), []);
 
   const dateColumns = useMemo(() => {
     return Array.from({ length: days }, (_, i) => addDays(today, i));
@@ -51,12 +51,16 @@ export function GanttChart({
     return vehicles.map((vehicle) => {
       const vehicleBookings = bookings.filter((b) => b.vehicleId === vehicle.id);
       
-      const sortedBookings = [...vehicleBookings].sort((a, b) => 
-        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-      );
+      const sortedBookings = [...vehicleBookings].sort((a, b) => {
+        const aCancelled = a.status === 'cancelled';
+        const bCancelled = b.status === 'cancelled';
+        if (aCancelled !== bCancelled) return aCancelled ? 1 : -1;
+        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+      });
 
       const lanes: { booking: Booking; laneIndex: number }[] = [];
       const laneEndDates: number[] = [];
+      const laneMaxHeights: number[] = [];
 
       sortedBookings.forEach((booking) => {
         const start = parseISO(booking.startDate).getTime();
@@ -64,7 +68,8 @@ export function GanttChart({
         
         let laneIndex = -1;
         for (let i = 0; i < laneEndDates.length; i++) {
-          if (start > laneEndDates[i]) {
+          // A small buffer to prevent visually touching bars
+          if (start > laneEndDates[i] + 86400000) { // +1 day
             laneIndex = i;
             laneEndDates[i] = end;
             break;
@@ -74,15 +79,36 @@ export function GanttChart({
         if (laneIndex === -1) {
           laneIndex = laneEndDates.length;
           laneEndDates.push(end);
+          laneMaxHeights.push(0);
         }
 
+        const bookingHeight = booking.status === 'cancelled' ? 8 : barHeight;
+        laneMaxHeights[laneIndex] = Math.max(laneMaxHeights[laneIndex], bookingHeight);
         lanes.push({ booking, laneIndex });
       });
 
-      const laneCount = Math.max(laneEndDates.length, 1);
-      const height = Math.max(56, verticalPadding * 2 + laneCount * barHeight + (laneCount - 1) * barGap);
+      const laneTops: number[] = [];
+      let currentTop = verticalPadding;
+      for (let i = 0; i < laneMaxHeights.length; i++) {
+        laneTops.push(currentTop);
+        currentTop += laneMaxHeights[i] + barGap;
+      }
 
-      return { vehicle, lanes, height };
+      const totalHeight = laneMaxHeights.length > 0 
+        ? currentTop - barGap + verticalPadding
+        : verticalPadding * 2;
+
+      const height = Math.max(56, totalHeight);
+
+      const finalLanes = lanes.map(({ booking, laneIndex }) => {
+        const displayHeight = booking.status === 'cancelled' ? 8 : barHeight;
+        const laneHeight = laneMaxHeights[laneIndex];
+        const top = laneTops[laneIndex] + (laneHeight - displayHeight) / 2;
+        return { booking, top, displayHeight };
+      });
+
+
+      return { vehicle, lanes: finalLanes, height };
     });
   }, [vehicles, bookings]);
 
@@ -166,11 +192,12 @@ export function GanttChart({
                     );
                   })}
 
-                  {lanes.map(({ booking, laneIndex }) => {
+                  {lanes.map(({ booking, top, displayHeight }) => {
                     const position = getBookingPosition(booking);
                     if (!position) return null;
 
-                    const showText = position.width >= 2;
+                    const isCancelled = booking.status === "cancelled";
+                    const showText = position.width >= 2 && !isCancelled;
                     const isPending = booking.status.startsWith("pending");
 
                     return (
@@ -181,11 +208,12 @@ export function GanttChart({
                         style={{
                           left: position.left * cellWidth + 4,
                           width: position.width * cellWidth - 8,
-                          top: verticalPadding + laneIndex * (barHeight + barGap),
-                          height: barHeight,
+                          top: top,
+                          height: displayHeight,
                           backgroundColor: isPending ? "white" : vehicle.colorHex,
                           border: isPending ? `2px solid ${vehicle.colorHex}` : "none",
                           color: isPending ? vehicle.colorHex : "white",
+                          opacity: isCancelled ? 0.7 : 1,
                         }}
                         data-testid={`gantt-booking-${booking.id}`}
                       >
