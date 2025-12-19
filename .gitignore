@@ -19,3 +19,7 @@ pnpm-debug.log*
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Replit
+.replit
+replit.nix
