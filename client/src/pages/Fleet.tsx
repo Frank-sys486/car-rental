@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/context/RoleContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CarFront, AlertCircle, Plus } from "lucide-react";
+import { getVehicles, createBooking, createVehicle, updateVehicle, deleteVehicle } from "@/lib/data";
 
 export default function Fleet() {
   const { isAdmin } = useRole();
@@ -27,12 +28,13 @@ export default function Fleet() {
   const endDateParam = searchParams.get("end");
 
   const { data: vehicles, isLoading, error } = useQuery<Vehicle[]>({
-    queryKey: [`/api/vehicles${searchString ? (searchString.startsWith("?") ? searchString : `?${searchString}`) : ""}`],
+    queryKey: ["vehicles", startDateParam, endDateParam],
+    queryFn: () => getVehicles(startDateParam || undefined, endDateParam || undefined),
   });
 
   const createBookingMutation = useMutation({
     mutationFn: async (data: InsertBooking) => {
-      return apiRequest("POST", "/api/bookings", data);
+      return createBooking(data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
@@ -55,10 +57,11 @@ export default function Fleet() {
 
   const createVehicleMutation = useMutation({
     mutationFn: async (data: InsertVehicle) => {
-      return apiRequest("POST", "/api/vehicles", data);
+      return createVehicle(data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       setVehicleDialogOpen(false);
       toast({ title: "Vehicle Added", description: "New vehicle has been added to the fleet." });
     },
@@ -67,10 +70,11 @@ export default function Fleet() {
   const updateVehicleMutation = useMutation({
     mutationFn: async (data: InsertVehicle & { id: string }) => {
       const { id, ...updates } = data;
-      return apiRequest("PATCH", `/api/vehicles/${id}`, updates);
+      return updateVehicle(id, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       setVehicleDialogOpen(false);
       setEditingVehicle(null);
       toast({ title: "Vehicle Updated", description: "Vehicle details have been updated." });
@@ -79,10 +83,11 @@ export default function Fleet() {
 
   const deleteVehicleMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/vehicles/${id}`);
+      return deleteVehicle(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       toast({ title: "Vehicle Deleted", description: "Vehicle has been removed from the fleet." });
     },
   });

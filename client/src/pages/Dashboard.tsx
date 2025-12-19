@@ -7,32 +7,39 @@ import { GanttChart } from "@/components/GanttChart";
 import { StatsCard } from "@/components/StatsCard";
 import { BookingDetailsModal } from "@/components/BookingDetailsModal";
 import { BookingEditDialog } from "@/components/BookingEditDialog";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/context/RoleContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Car, CalendarCheck, Banknote, LayoutDashboard, ShieldAlert, RefreshCw, AlertCircle, TrendingUp } from "lucide-react";
+import { Car, CalendarCheck, Banknote, LayoutDashboard, ShieldAlert, RefreshCw, AlertCircle, TrendingUp, Plus, Settings } from "lucide-react";
+import { getVehicles, getBookings, getStats, updateBooking, createBooking } from "@/lib/data";
 
 export default function Dashboard() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [addBookingModalOpen, setAddBookingModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { toast } = useToast();
   const { isAdmin } = useRole();
   const [, setLocation] = useLocation();
 
   const { data: vehicles, isLoading: vehiclesLoading, error: vehiclesError, refetch: refetchVehicles } = useQuery<Vehicle[]>({
-    queryKey: ["/api/vehicles"],
+    queryKey: ["vehicles"],
+    queryFn: () => getVehicles(),
   });
 
   const { data: bookings, isLoading: bookingsLoading, error: bookingsError, refetch: refetchBookings } = useQuery<Booking[]>({
-    queryKey: ["/api/bookings"],
+    queryKey: ["bookings"],
+    queryFn: () => getBookings(),
   });
 
   const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useQuery<DashboardStats>({
-    queryKey: ["/api/stats"],
+    queryKey: ["stats"],
+    queryFn: () => getStats(),
   });
 
   if (!isAdmin) {
@@ -80,11 +87,11 @@ export default function Dashboard() {
 
   const updateBookingMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Booking> & { id: string }) => {
-      return apiRequest("PATCH", `/api/bookings/${id}`, updates);
+      return updateBooking(id, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
       setDetailsModalOpen(false);
       setSelectedBooking(null);
       toast({
@@ -101,7 +108,29 @@ export default function Dashboard() {
     },
   });
 
-  const handleEditBooking = (id: string, data: any) => {
+  const createBookingMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return createBooking(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      setAddBookingModalOpen(false);
+      toast({
+        title: "Booking Created",
+        description: "New booking has been created successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Creation Failed",
+        description: error.message || "Failed to create booking.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditBooking = (id: string | undefined, data: any) => {
     updateBookingMutation.mutate({
       id,
       ...data,
@@ -112,6 +141,14 @@ export default function Dashboard() {
         setEditModalOpen(false);
         setDetailsModalOpen(true);
       }
+    });
+  };
+
+  const handleCreateBooking = (_id: string | undefined, data: any) => {
+    createBookingMutation.mutate({
+      ...data,
+      startDate: format(data.startDate, "yyyy-MM-dd"),
+      endDate: format(data.endDate, "yyyy-MM-dd"),
     });
   };
 
@@ -140,16 +177,26 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-md bg-primary/10">
-            <LayoutDashboard className="h-5 w-5 text-primary" />
+      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 rounded-md bg-primary/10">
+              <LayoutDashboard className="h-5 w-5 text-primary" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Manage your fleet and bookings at a glance
+          </p>
         </div>
-        <p className="text-muted-foreground">
-          Manage your fleet and bookings at a glance
-        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setSettingsOpen(true)}>
+            <Settings className="mr-2 h-4 w-4" /> Settings
+          </Button>
+          <Button onClick={() => setAddBookingModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Booking
+          </Button>
+        </div>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -240,6 +287,20 @@ export default function Dashboard() {
         vehicles={vehicles || []}
         onSubmit={handleEditBooking}
         isLoading={updateBookingMutation.isPending}
+      />
+
+      <BookingEditDialog
+        open={addBookingModalOpen}
+        onOpenChange={setAddBookingModalOpen}
+        booking={null}
+        vehicles={vehicles || []}
+        onSubmit={handleCreateBooking}
+        isLoading={createBookingMutation.isPending}
+      />
+
+      <SettingsDialog 
+        open={settingsOpen} 
+        onOpenChange={setSettingsOpen} 
       />
     </div>
   );

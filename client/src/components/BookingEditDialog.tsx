@@ -33,7 +33,7 @@ interface BookingEditDialogProps {
   onOpenChange: (open: boolean) => void;
   booking: Booking | null;
   vehicles: Vehicle[];
-  onSubmit: (id: string, data: EditBookingFormValues) => void;
+  onSubmit: (id: string | undefined, data: EditBookingFormValues) => void;
   isLoading?: boolean;
 }
 
@@ -63,19 +63,34 @@ export function BookingEditDialog({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
-    if (booking && open) {
-      form.reset({
-        guestName: booking.guestName,
-        guestPhone: booking.guestPhone,
-        vehicleId: booking.vehicleId,
-        startDate: parseISO(booking.startDate),
-        endDate: parseISO(booking.endDate),
-        totalPrice: booking.totalPrice,
-        status: booking.status,
-        idVerified: booking.idVerified,
-        idImageUrl: booking.idImageUrl,
-      });
-      setImagePreview(booking.idImageUrl || null);
+    if (open) {
+      if (booking) {
+        form.reset({
+          guestName: booking.guestName,
+          guestPhone: booking.guestPhone,
+          vehicleId: booking.vehicleId,
+          startDate: parseISO(booking.startDate),
+          endDate: parseISO(booking.endDate),
+          totalPrice: booking.totalPrice,
+          status: booking.status,
+          idVerified: booking.idVerified,
+          idImageUrl: booking.idImageUrl,
+        });
+        setImagePreview(booking.idImageUrl || null);
+      } else {
+        form.reset({
+          guestName: "",
+          guestPhone: "",
+          vehicleId: "",
+          startDate: new Date(),
+          endDate: new Date(),
+          totalPrice: 0,
+          status: "pending",
+          idVerified: false,
+          idImageUrl: null,
+        });
+        setImagePreview(null);
+      }
     }
   }, [booking, open, form]);
 
@@ -98,9 +113,7 @@ export function BookingEditDialog({
   }, [watchVehicleId, watchStartDate, watchEndDate, vehicles, form, open]);
 
   const handleSubmit = (data: EditBookingFormValues) => {
-    if (booking) {
-      onSubmit(booking.id, data);
-    }
+    onSubmit(booking?.id, data);
   };
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -127,7 +140,7 @@ export function BookingEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Edit Booking</DialogTitle>
+          <DialogTitle>{booking ? "Edit Booking" : "Add New Booking"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -320,7 +333,7 @@ export function BookingEditDialog({
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Saving..." : "Save Changes"}
+              {isLoading ? "Saving..." : (booking ? "Save Changes" : "Create Booking")}
             </Button>
           </form>
         </Form>
