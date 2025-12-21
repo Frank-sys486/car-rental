@@ -8,7 +8,6 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { Navbar } from "@/components/Navbar";
 import Home from "@/pages/Home";
 import Fleet from "@/pages/Fleet";
-import Dashboard from "@/pages/Dashboard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,7 +15,6 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/fleet" component={Fleet} />
-      <Route path="/dashboard" component={Dashboard} />
       <Route component={NotFound} />
     </Switch>
   );
