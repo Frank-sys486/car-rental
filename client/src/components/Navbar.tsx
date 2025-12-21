@@ -1,13 +1,11 @@
 import { useLocation } from "wouter";
 import { Car, Moon, Sun, LayoutDashboard, Home, CarFront } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { useRole } from "@/context/RoleContext";
 import { useTheme } from "@/context/ThemeContext";
 
 export function Navbar() {
-  const { toggleRole, isAdmin } = useRole();
+  const { isAdmin } = useRole();
   const { toggleTheme, isDark } = useTheme();
   const [location, setLocation] = useLocation();
 
@@ -45,46 +43,10 @@ export function Navbar() {
               <CarFront className="h-4 w-4" />
               Fleet
             </Button>
-            {isAdmin && (
-              <Button
-                variant={location === "/dashboard" ? "secondary" : "ghost"}
-                size="sm"
-                className="gap-2"
-                onClick={() => setLocation("/dashboard")}
-                data-testid="nav-dashboard"
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                Dashboard
-              </Button>
-            )}
+  
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            <div className="flex items-center gap-2 bg-muted/50 rounded-full px-3 py-1.5">
-              <Label
-                htmlFor="role-toggle"
-                className={`text-xs font-medium transition-colors cursor-pointer ${
-                  !isAdmin ? "text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                Customer
-              </Label>
-              <Switch
-                id="role-toggle"
-                checked={isAdmin}
-                onCheckedChange={toggleRole}
-                data-testid="switch-role-toggle"
-              />
-              <Label
-                htmlFor="role-toggle"
-                className={`text-xs font-medium transition-colors cursor-pointer ${
-                  isAdmin ? "text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                Admin
-              </Label>
-            </div>
-
             <Button
               size="icon"
               variant="ghost"
