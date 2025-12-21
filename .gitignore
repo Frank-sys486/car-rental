@@ -23,3 +23,6 @@ pnpm-debug.log*
 # Replit
 .replit
 replit.nix
+replit.yaml
+.local/
+state/
