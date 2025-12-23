@@ -15,9 +15,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("userRole");
-      return (saved as Role) || "admin";
+      return (saved as Role) || "customer";
     }
-    return "admin";
+    return "customer";
   });
 
   useEffect(() => {
